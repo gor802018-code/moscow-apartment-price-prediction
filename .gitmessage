@@ -1,1 +1,1 @@
-feat: add core config, logging and security utilities
+feat: add sqlalchemy models and alembic migrations
