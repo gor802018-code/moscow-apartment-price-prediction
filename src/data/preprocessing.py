@@ -1,12 +1,11 @@
 """Предобработка данных для ML-модели."""
 
 import re
-from typing import Optional
 
 import pandas as pd
 
 
-def parse_price(text: str) -> Optional[float]:
+def parse_price(text: str) -> float | None:
     """Парсит цену из строки ('10 млн' -> 10000000, '5 500 000' -> 5500000)."""
     text = str(text).strip().lower().replace(" ", "")
 
@@ -34,7 +33,7 @@ def clean_price(df: pd.DataFrame, column: str = "price") -> pd.DataFrame:
     return df
 
 
-def parse_area(text: str) -> Optional[float]:
+def parse_area(text: str) -> float | None:
     """Парсит площадь ('50 м²' -> 50.0)."""
     match = re.search(r"([\d]+(?:\.\d+)?)\s*м[²2]", str(text))
     return float(match.group(1)) if match else None

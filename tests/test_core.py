@@ -2,8 +2,6 @@
 
 from unittest.mock import patch
 
-import pytest
-
 from src.core.config import Settings
 from src.core.security import (
     create_access_token,

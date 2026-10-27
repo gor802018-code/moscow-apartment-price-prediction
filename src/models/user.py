@@ -1,6 +1,6 @@
 """Модель пользователя."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -23,6 +23,6 @@ class User(Base):
     )
 
     # Связи
-    predictions: Mapped[list["Prediction"]] = relationship(
+    predictions: Mapped[list["Prediction"]] = relationship(  # noqa: F821
         "Prediction", back_populates="user", cascade="all, delete-orphan"
     )

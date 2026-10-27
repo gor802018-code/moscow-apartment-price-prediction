@@ -5,9 +5,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from src.api.routers import auth, prediction, health
+from src.api.routers import auth, health, prediction
 from src.core.config import get_settings
-from src.core.logging import setup_logging, get_logger
+from src.core.logging import get_logger, setup_logging
 
 log = get_logger(__name__)
 settings = get_settings()

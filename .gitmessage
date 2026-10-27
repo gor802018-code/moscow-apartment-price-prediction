@@ -1,6 +1,6 @@
-refactor: split Dockerfile into backend and frontend, update docker-compose
+style: fix ruff linting issues
 
-- Dockerfile.backend: multi-stage, non-root, FastAPI + ML deps
-- Dockerfile.frontend: Streamlit + requests only
-- docker-compose: only port 8501 exposed, backend uses expose
-- API calls from frontend use API_BASE env var
+- Auto-fix import sorting, unused imports, whitespace
+- Add from __future__ import annotations to models
+- Add noqa for forward references in SQLAlchemy relationships
+- Update Dockerfile.frontend for API_BASE env var

@@ -1,7 +1,8 @@
 """Репозиторий для загрузки ML-модели."""
 
-import joblib
 from pathlib import Path
+
+import joblib
 
 from src.core.config import get_settings
 

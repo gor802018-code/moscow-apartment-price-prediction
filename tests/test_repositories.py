@@ -1,18 +1,15 @@
 """Тесты для repository layer (SQLite in-memory + mocks)."""
 
-from unittest.mock import MagicMock, patch
 
 import joblib
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.models.base import Base
-from src.models.user import User
-from src.models.prediction import Prediction
-from src.repositories.user_repository import UserRepository
-from src.repositories.prediction_repository import PredictionRepository
 from src.repositories.model_repository import ModelRepository
+from src.repositories.prediction_repository import PredictionRepository
+from src.repositories.user_repository import UserRepository
 
 
 @pytest.fixture(scope="session")

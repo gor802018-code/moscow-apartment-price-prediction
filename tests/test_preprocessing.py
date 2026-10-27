@@ -1,14 +1,13 @@
 """Тесты для data preprocessing."""
 
 import pandas as pd
-import pytest
 
 from src.data.preprocessing import (
-    parse_price,
-    clean_price,
-    parse_area,
     clean_area,
+    clean_price,
     extract_features,
+    parse_area,
+    parse_price,
 )
 
 

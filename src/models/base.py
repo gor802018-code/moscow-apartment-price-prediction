@@ -1,6 +1,5 @@
 """Базовый класс для всех SQLAlchemy моделей."""
 
-from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase
 
 

@@ -1,6 +1,5 @@
 """Тесты для обучения модели (CatBoost + Optuna)."""
 
-import os
 from pathlib import Path
 
 import joblib
@@ -8,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.training.train import train_model, objective
+from src.training.train import train_model
 
 
 @pytest.fixture

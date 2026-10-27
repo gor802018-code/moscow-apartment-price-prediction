@@ -4,8 +4,8 @@ import re
 from typing import Any
 
 from bs4 import BeautifulSoup
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from playwright.async_api import async_playwright, Page, Browser
+from playwright.async_api import async_playwright
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src.core.logging import get_logger
 

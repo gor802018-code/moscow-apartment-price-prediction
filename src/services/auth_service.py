@@ -2,9 +2,14 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.security import hash_password, verify_password, create_access_token, decode_access_token
-from src.repositories.user_repository import UserRepository
 from src.core.logging import get_logger
+from src.core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
+from src.repositories.user_repository import UserRepository
 
 log = get_logger(__name__)
 

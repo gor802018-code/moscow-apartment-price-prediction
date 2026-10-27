@@ -8,7 +8,7 @@ def _walk_package(package_name):
     """Рекурсивно получить все подмодули пакета."""
     package = importlib.import_module(package_name)
     modules = []
-    for importer, modname, ispkg in pkgutil.walk_packages(
+    for _importer, modname, _ispkg in pkgutil.walk_packages(
         package.__path__, package.__name__ + "."
     ):
         modules.append(modname)

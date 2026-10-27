@@ -1,13 +1,12 @@
 """Тесты для парсера (scraper)."""
 
-import re
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from src.ingestion.scraper import (
-    _parse_price,
     _parse_area,
+    _parse_price,
     _parse_rooms,
     parse_listing,
     scrape_listings,

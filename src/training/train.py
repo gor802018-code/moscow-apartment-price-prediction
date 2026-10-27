@@ -4,12 +4,11 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import numpy as np
 import optuna
 import pandas as pd
 from catboost import CatBoostRegressor, Pool
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import train_test_split
 
 from src.core.logging import get_logger
 

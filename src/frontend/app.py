@@ -1,9 +1,9 @@
 """Streamlit приложение — фронтенд для предсказания цен на квартиры."""
 
+import os
+
 import requests
 import streamlit as st
-
-import os
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000/api/v1")
 

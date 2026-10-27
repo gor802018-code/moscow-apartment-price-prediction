@@ -1,12 +1,12 @@
 """Роутер аутентификации: /register, /login."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import get_db, get_current_user
-from src.api.schemas import RegisterRequest, LoginRequest, TokenResponse
+from src.api.dependencies import get_db
+from src.api.schemas import LoginRequest, RegisterRequest, TokenResponse
 from src.core.logging import get_logger
 from src.services.auth_service import AuthService
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 

@@ -1,11 +1,12 @@
 """Тесты для моделей и БД (SQLite in-memory)."""
 
-from sqlalchemy import create_engine, text as sa_text
+from sqlalchemy import create_engine
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from src.models.base import Base
-from src.models.user import User
 from src.models.prediction import Prediction
+from src.models.user import User
 
 
 def _get_test_db():

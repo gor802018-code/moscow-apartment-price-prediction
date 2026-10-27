@@ -1,9 +1,10 @@
 """Утилиты безопасности: хэширование паролей и JWT."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+
 from src.core.config import get_settings
 
 # Используем pbkdf2_sha256 вместо bcrypt из-за несовместимости passlib с bcrypt 4.x
@@ -32,12 +33,12 @@ def create_access_token(subject: str, expires_delta: int | None = None) -> str:
     """
     settings = get_settings()
     expire_minutes = expires_delta or settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    expires = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
+    expires = datetime.now(UTC) + timedelta(minutes=expire_minutes)
 
     payload = {
         "sub": subject,
         "exp": expires,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

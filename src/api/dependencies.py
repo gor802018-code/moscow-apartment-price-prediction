@@ -1,10 +1,10 @@
 """Зависимости FastAPI (DI): БД, текущий пользователь, токен."""
 
-from fastapi import Depends, HTTPException, Header, status
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.core.security import decode_access_token
 from src.core.logging import get_logger
+from src.core.security import decode_access_token
 
 log = get_logger(__name__)
 

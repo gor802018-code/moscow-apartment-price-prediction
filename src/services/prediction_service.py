@@ -5,8 +5,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.logging import get_logger
-from src.repositories.prediction_repository import PredictionRepository
 from src.repositories.model_repository import ModelRepository
+from src.repositories.prediction_repository import PredictionRepository
 
 log = get_logger(__name__)
 

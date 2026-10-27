@@ -1,8 +1,8 @@
 """Модель предсказания."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, JSON, ForeignKey, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import Base
@@ -24,4 +24,4 @@ class Prediction(Base):
     )
 
     # Связи
-    user: Mapped["User"] = relationship("User", back_populates="predictions")
+    user: Mapped["User"] = relationship("User", back_populates="predictions")  # noqa: F821

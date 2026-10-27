@@ -1,12 +1,12 @@
 """Роутер предсказаний: /predict, /history."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import get_db, get_current_user
-from src.api.schemas import PredictionRequest, PredictionResponse, HistoryResponse
+from src.api.dependencies import get_current_user, get_db
+from src.api.schemas import HistoryResponse, PredictionRequest, PredictionResponse
 from src.core.logging import get_logger
 from src.services.prediction_service import PredictionService
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 
