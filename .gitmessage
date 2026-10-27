@@ -1,6 +1,1 @@
-feat: add API versioning v1
-
-- Prefix all routes with /api/v1
-- Update all test paths to use /api/v1 endpoints
-- Remove debug test file and catboost artifacts from git
-- Fix ModelRepository mock path in API tests
+feat: add streamlit client with jwt auth and docker-compose
