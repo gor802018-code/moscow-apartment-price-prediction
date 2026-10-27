@@ -3,7 +3,9 @@
 import requests
 import streamlit as st
 
-API_BASE = "http://localhost:8000/api/v1"
+import os
+
+API_BASE = os.getenv("API_BASE", "http://localhost:8000/api/v1")
 
 st.set_page_config(page_title="Kwork ML — Предсказание цен", page_icon="🏠", layout="centered")
 st.title("🏠 Предсказание цен на квартиры в Москве")

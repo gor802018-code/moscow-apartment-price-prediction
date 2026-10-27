@@ -1,7 +1,6 @@
-docs: update README with architecture, API docs, DB schema
+refactor: split Dockerfile into backend and frontend, update docker-compose
 
-- Full architecture diagram (layered)
-- API documentation with examples (v1 endpoints)
-- Database schema (users, predictions)
-- Project structure overview
-- Test commands and CI/CD info
+- Dockerfile.backend: multi-stage, non-root, FastAPI + ML deps
+- Dockerfile.frontend: Streamlit + requests only
+- docker-compose: only port 8501 exposed, backend uses expose
+- API calls from frontend use API_BASE env var
