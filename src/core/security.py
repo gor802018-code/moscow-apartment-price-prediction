@@ -6,11 +6,12 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from src.core.config import get_settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Используем pbkdf2_sha256 вместо bcrypt из-за несовместимости passlib с bcrypt 4.x
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
-    """Хэширует пароль с помощью bcrypt."""
+    """Хэширует пароль с помощью pbkdf2_sha256."""
     return pwd_context.hash(password)
 
 

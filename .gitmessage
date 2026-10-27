@@ -1,1 +1,7 @@
-feat: add auth and prediction services
+fix: resolve bcrypt incompatibility, aiosqlite, and test ordering issues
+
+- Replace bcrypt with pbkdf2_sha256 in security.py (passlib/bcrypt 4.x incompatibility)
+- Use id-based ordering in PredictionRepository.get_history (created_at server_default issue)
+- Fix async session.execute calls in test_repositories.py
+- Replace MagicMock with _DummyModel for joblib serialization in tests
+- Add aiosqlite as dev dependency

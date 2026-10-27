@@ -1,7 +1,8 @@
 """Тесты для core: config, security, logging."""
 
-import os
 from unittest.mock import patch
+
+import pytest
 
 from src.core.config import Settings
 from src.core.security import (
@@ -31,6 +32,13 @@ class TestSecurity:
         hash2 = hash_password(plain)
         assert hash1 != hash2
 
+    def test_hash_password_length(self):
+        """Хэш имеет корректную длину для bcrypt."""
+        long_pass = "A" * 100
+        hashed = hash_password(long_pass)
+        assert len(hashed) > 0
+        assert verify_password(long_pass, hashed)
+
     def test_create_and_decode_token(self):
         """JWT токен создаётся и декодируется."""
         token = create_access_token("test@example.com")
@@ -43,10 +51,8 @@ class TestSecurity:
         assert result is None
 
     def test_token_expires(self):
-        """Токен с нулевым TTL невалиден."""
+        """Токен с нулевым TTL валиден сразу после создания."""
         token = create_access_token("test@example.com", expires_delta=0)
-        # Токен с expires_delta=0 всё ещё валиден сразу после создания,
-        # но expires должен быть в прошлом
         subject = decode_access_token(token)
         assert subject == "test@example.com"
 
@@ -56,7 +62,7 @@ class TestSettings:
 
     def test_settings_default_values(self):
         """Значения по умолчанию загружаются."""
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict("os.environ", {}, clear=True):
             settings = Settings()
             assert settings.APP_NAME == "Kwork ML"
             assert settings.ALGORITHM == "HS256"
@@ -64,7 +70,7 @@ class TestSettings:
 
     def test_settings_from_env(self):
         """Настройки переопределяются через окружение."""
-        with patch.dict(os.environ, {"APP_NAME": "TestApp", "DEBUG": "true"}):
+        with patch.dict("os.environ", {"APP_NAME": "TestApp", "DEBUG": "true"}):
             settings = Settings()
             assert settings.APP_NAME == "TestApp"
             assert settings.DEBUG is True

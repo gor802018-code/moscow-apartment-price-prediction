@@ -1,10 +1,11 @@
 """Тесты для repository layer (SQLite in-memory + mocks)."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import joblib
-import numpy as np
 import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from src.models.base import Base
 from src.models.user import User
@@ -14,36 +15,32 @@ from src.repositories.prediction_repository import PredictionRepository
 from src.repositories.model_repository import ModelRepository
 
 
+@pytest.fixture(scope="session")
+def event_loop():
+    """Создает event loop на сессию для pytest-asyncio."""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
 @pytest.fixture
-def async_session():
-    """Создает тестовую сессию SQLAlchemy."""
-    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-    from sqlalchemy.orm import sessionmaker
-
+async def db_engine():
+    """Создает тестовый engine."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-
-    async def setup():
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-    async def get_session():
-        async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with async_session_maker() as session:
-            yield session
-
-    async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
-
-    yield async_session_maker
-
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-
     await engine.dispose()
 
 
 @pytest.fixture
-async def session(async_session):
-    async with async_session() as s:
+async def session(db_engine):
+    """Создает тестовую сессию."""
+    async_session_maker = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with async_session_maker() as s:
         yield s
 
 
@@ -89,21 +86,16 @@ class TestPredictionRepository:
     @pytest.mark.asyncio
     async def test_save_prediction(self, session, prediction_repo):
         """Сохранение предсказания."""
-        user = await session.execute(
-            __import__("sqlalchemy", fromlist=["text"]).text(
-                "INSERT INTO users (email, hashed_password) VALUES (:email, :password)"
-            )
-        )
-        # Создаем пользователя вручную через SQLAlchemy sync
-        from sqlalchemy import text
-        session.execute(
+        await session.execute(
             text("INSERT INTO users (email, hashed_password) VALUES (:email, :password)"),
             {"email": "pred@example.com", "password": "pass"},
         )
         await session.commit()
 
-        # Получаем ID пользователя
-        result = await session.execute(text("SELECT id FROM users WHERE email = :email"))
+        result = await session.execute(
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": "pred@example.com"},
+        )
         user_id = result.scalar()
 
         pred = await prediction_repo.save_prediction(
@@ -117,8 +109,16 @@ class TestPredictionRepository:
     @pytest.mark.asyncio
     async def test_get_history(self, session, prediction_repo):
         """Получение истории предсказаний."""
-        from sqlalchemy import text
-        result = await session.execute(text("SELECT id FROM users WHERE email = :email"))
+        await session.execute(
+            text("INSERT INTO users (email, hashed_password) VALUES (:email, :password)"),
+            {"email": "hist@example.com", "password": "pass"},
+        )
+        await session.commit()
+
+        result = await session.execute(
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": "hist@example.com"},
+        )
         user_id = result.scalar()
 
         await prediction_repo.save_prediction(
@@ -134,7 +134,17 @@ class TestPredictionRepository:
 
         history = await prediction_repo.get_history(user_id)
         assert len(history) == 2
-        assert history[0].predicted_price == 12000000.0  # newest first
+        assert history[0].predicted_price == 12000000.0  # newest first (by id)
+
+
+class _DummyModel:
+    """Простая модель для тестов (поддерживает pickle)."""
+
+    def __init__(self, predictions):
+        self._predictions = predictions
+
+    def predict(self, X):
+        return self._predictions[:len(X)]
 
 
 class TestModelRepository:
@@ -142,26 +152,27 @@ class TestModelRepository:
 
     def test_load_model(self, tmp_path):
         """Загрузка модели из файла."""
-        # Создаем тестовую модель
-        model_path = tmp_path / "test_model.joblib"
-        dummy_model = MagicMock(predict=lambda X: [1000000.0] * len(X))
+        model_path = str(tmp_path / "test_model.joblib")
+        dummy_model = _DummyModel([1000000.0] * 5)
         joblib.dump(dummy_model, model_path)
 
-        with patch.object(__import__("src.core.config", fromlist=["get_settings"]), "get_settings") as mock_settings:
-            mock_settings.return_value.model_path = str(model_path)
-            repo = ModelRepository()
-            loaded = repo.load()
-            assert loaded is dummy_model
+        repo = ModelRepository(model_path=model_path)
+        loaded = repo.load()
+        assert loaded.predict([[1]]) == [1000000.0]
+
+    def test_model_not_found(self):
+        """Файл модели не найден."""
+        repo = ModelRepository(model_path="/nonexistent/path/model.joblib")
+        with pytest.raises(FileNotFoundError):
+            repo.load()
 
     @pytest.mark.asyncio
     async def test_predict(self, tmp_path):
         """Предсказание через модель."""
-        model_path = tmp_path / "predict_model.joblib"
-        dummy_model = MagicMock(predict=lambda X: [1000000.0, 2000000.0])
+        model_path = str(tmp_path / "predict_model.joblib")
+        dummy_model = _DummyModel([1000000.0, 2000000.0])
         joblib.dump(dummy_model, model_path)
 
-        with patch.object(__import__("src.core.config", fromlist=["get_settings"]), "get_settings") as mock_settings:
-            mock_settings.return_value.model_path = str(model_path)
-            repo = ModelRepository()
-            result = await repo.predict([[1, 30], [2, 50]])
-            assert result == [1000000.0, 2000000.0]
+        repo = ModelRepository(model_path=model_path)
+        result = await repo.predict([[1, 30], [2, 50]])
+        assert result == [1000000.0, 2000000.0]

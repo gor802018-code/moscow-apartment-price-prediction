@@ -32,11 +32,11 @@ class PredictionRepository:
         return prediction
 
     async def get_history(self, user_id: int, limit: int = 50) -> list[Prediction]:
-        """Возвращает историю предсказаний пользователя."""
+        """Возвращает историю предсказаний пользователя (новые первые)."""
         result = await self.session.execute(
             select(Prediction)
             .where(Prediction.user_id == user_id)
-            .order_by(Prediction.created_at.desc())
+            .order_by(Prediction.id.desc())
             .limit(limit)
         )
         return list(result.scalars().all())

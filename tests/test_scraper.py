@@ -91,17 +91,15 @@ class TestScrapeListings:
     async def test_scrape_listings(self):
         """Парсинг списка квартир."""
         html = """
-        <div class="listings">
-            <div class="item-card">
-                <span class="price">10 млн</span>
-                <span class="area">50 м²</span>
-                <span class="rooms">2 комнаты</span>
-            </div>
-            <div class="item-card">
-                <span class="price">15 млн</span>
-                <span class="area">75 м²</span>
-                <span class="rooms">3 комнаты</span>
-            </div>
+        <div class="item-card" data-id="1">
+            <span class="price">10 млн</span>
+            <span class="area">50 м²</span>
+            <span class="rooms">2 комнаты</span>
+        </div>
+        <div class="item-card" data-id="2">
+            <span class="price">15 млн</span>
+            <span class="area">75 м²</span>
+            <span class="rooms">3 комнаты</span>
         </div>
         """
 
