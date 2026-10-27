@@ -1,1 +1,1 @@
-feat: add sqlalchemy models and alembic migrations
+feat: add repositories for user, prediction and model access
