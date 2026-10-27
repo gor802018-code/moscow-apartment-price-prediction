@@ -91,7 +91,7 @@ class TestAuthService:
             service.user_repo = AsyncMock()
             service.user_repo.get_by_email = AsyncMock(return_value=None)
 
-            with pytest.raises(ValueError, match="User not found"):
+            with pytest.raises(ValueError, match="Invalid email or password"):
                 await service.login("missing@example.com", "password")
 
     @pytest.mark.asyncio
@@ -104,7 +104,7 @@ class TestAuthService:
             service.user_repo.get_by_email = AsyncMock(return_value=mock_user)
 
             with patch("src.services.auth_service.verify_password", return_value=False):
-                with pytest.raises(ValueError, match="Invalid password"):
+                with pytest.raises(ValueError, match="Invalid email or password"):
                     await service.login("test@example.com", "wrong")
 
 

@@ -159,6 +159,8 @@ class TestModelRepository:
 
     def test_model_not_found(self):
         """Файл модели не найден."""
+        # Clear class-level cache before test
+        ModelRepository._model = None
         repo = ModelRepository(model_path="/nonexistent/path/model.joblib")
         with pytest.raises(FileNotFoundError):
             repo.load()

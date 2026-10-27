@@ -1,17 +1,17 @@
 """Pydantic-схемы для API."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 # --- Auth ---
 
 
 class RegisterRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str = Field(min_length=8, max_length=128)
 
 
 class LoginRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
 

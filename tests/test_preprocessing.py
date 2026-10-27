@@ -85,5 +85,5 @@ class TestExtractFeatures:
         assert "building_age" in result.columns
 
         assert result.iloc[0]["area_per_room"] == 25.0
-        assert result.iloc[0]["building_age"] == 20
+        assert result.iloc[0]["building_age"] == 21  # datetime.now().year - 2005
         assert abs(result.iloc[0]["floor_ratio"] - 0.4) < 0.01

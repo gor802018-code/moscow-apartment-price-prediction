@@ -4,17 +4,34 @@ import re
 from typing import Any
 
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from src.core.logging import get_logger
 
 log = get_logger(__name__)
 
 
+class ScraperError(Exception):
+    """Базовое исключение для ошибок парсинга."""
+
+
+class ScraperParseError(ScraperError):
+    """Ошибка разбора данных."""
+
+
+class ScraperEmptyResult(ScraperError):
+    """Парсер не нашёл никаких объявлений."""
+
+
 def _parse_price(text: str) -> float | None:
     """Парсит цену из строки ('10 млн' -> 10000000, '5 500 000' -> 5500000)."""
-    text = text.strip().lower().replace(" ", "")
+    text = text.strip().lower().replace(" ", "").replace(",", "")
 
     # "X млн"
     match = re.search(r"(\d+(?:\.\d+)?)\s*млн", text)
@@ -27,17 +44,16 @@ def _parse_price(text: str) -> float | None:
         return float(match.group(1)) * 1_000
 
     # Просто число
-    match = re.search(r"([\d\s]+)", text)
+    match = re.search(r"(\d+)", text)
     if match:
-        cleaned = match.group(1).replace(" ", "")
-        return float(cleaned)
+        return float(match.group(1))
 
     return None
 
 
 def _parse_area(text: str) -> float | None:
     """Парсит площадь ('50 м²' -> 50.0)."""
-    match = re.search(r"([\d]+(?:\.\d+)?)\s*м[²2]", text)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*м[²2]", text)
     if match:
         return float(match.group(1))
     return None
@@ -54,30 +70,49 @@ def _parse_rooms(text: str) -> int | None:
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type(Exception),
+    retry=(
+        retry_if_exception_type(PlaywrightTimeoutError)
+        | retry_if_exception_type(ConnectionError)
+        | retry_if_exception_type(TimeoutError)
+    ),
     reraise=True,
 )
 async def fetch_page(url: str) -> str:
-    """Загружает HTML страницы через Playwright с ретраями."""
+    """Загружает HTML страницы через Playwright с ретраями.
+
+    Ретраит только при таймаутах и сетевых ошибках.
+    """
     log.info("Fetching page", url=url)
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        try:
-            page = await browser.new_page()
-            await page.goto(url, wait_until="networkidle")
-            await page.wait_for_timeout(2000)  # ждем подгрузки динамического контента
-            html = await page.content()
-            log.info("Page fetched successfully", url=url, length=len(html))
-            return html
-        finally:
-            await browser.close()
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            try:
+                page = await browser.new_page()
+                await page.goto(url, wait_until="networkidle", timeout=30000)
+                await page.wait_for_timeout(2000)  # ждем подгрузки динамического контента
+                html = await page.content()
+                log.info("Page fetched successfully", url=url, length=len(html))
+                if not html or len(html) < 100:
+                    raise ScraperParseError(f"Empty or too short page content: {len(html)} bytes")
+                return html
+            finally:
+                await browser.close()
+    except PlaywrightTimeoutError:
+        log.warning("Page timeout", url=url)
+        raise
+    except ScraperParseError:
+        raise
+    except Exception as e:
+        log.error("Page fetch error", url=url, error=str(e))
+        raise ScraperError(f"Failed to fetch page: {e}") from e
 
 
-def parse_listing(html: str) -> dict[str, Any]:
+def parse_listing(html: str, url: str = "") -> dict[str, Any]:
     """Парсит одну карточку квартиры из HTML.
 
     Args:
         html: HTML-разметка карточки объявления.
+        url: URL страницы источника для дедупликации.
 
     Returns:
         Словарь с полями: price, area, rooms, district, url.
@@ -105,6 +140,7 @@ def parse_listing(html: str) -> dict[str, Any]:
         "area": area,
         "rooms": rooms,
         "district": district,
+        "source_url": url,
     }
 
 
@@ -115,18 +151,33 @@ async def scrape_listings(url: str) -> list[dict[str, Any]]:
         url: URL страницы с объявлениями.
 
     Returns:
-        Список словарей с данными квартир.
+        Список словарей с данными квартир (без дубликатов).
     """
     html = await fetch_page(url)
     soup = BeautifulSoup(html, "html.parser")
 
     # Ищем все карточки (адаптировать под реальный сайт)
+    seen_keys: set[tuple] = set()
     listings = []
     for item in soup.find_all("div", class_=re.compile(r"item|card|listing")):
         listing_html = str(item)
-        data = parse_listing(listing_html)
-        if data.get("price") and data.get("area"):
-            listings.append(data)
+        data = parse_listing(listing_html, url=url)
+        if not data.get("price") or not data.get("area"):
+            continue
 
-    log.info("Scraped listings", count=len(listings), source=url)
+        # Дедупликация по ключу (rooms, area, district, price)
+        dedup_key = (
+            data["rooms"],
+            round(data["area"], 1),
+            data["district"],
+            round(data["price"], -3),
+        )
+        if dedup_key in seen_keys:
+            log.debug("Skipping duplicate listing", key=dedup_key)
+            continue
+
+        seen_keys.add(dedup_key)
+        listings.append(data)
+
+    log.info("Scraped listings", count=len(listings), source=url, unique=len(seen_keys))
     return listings

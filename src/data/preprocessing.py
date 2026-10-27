@@ -1,13 +1,25 @@
 """Предобработка данных для ML-модели."""
 
 import re
+from typing import TYPE_CHECKING
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from src.core.config import Settings
+
+
+def _get_current_year(settings: "Settings | None" = None) -> int:
+    """Возвращает текущий год из настроек или по умолчанию."""
+    if settings is not None:
+        return settings.current_year
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).year
 
 
 def parse_price(text: str) -> float | None:
     """Парсит цену из строки ('10 млн' -> 10000000, '5 500 000' -> 5500000)."""
-    text = str(text).strip().lower().replace(" ", "")
+    text = str(text).strip().lower().replace(" ", "").replace(",", "")
 
     match = re.search(r"(\d+(?:\.\d+)?)\s*млн", text)
     if match:
@@ -17,7 +29,7 @@ def parse_price(text: str) -> float | None:
     if match:
         return float(match.group(1)) * 1_000
 
-    match = re.search(r"([\d]+)", text)
+    match = re.search(r"(\d+)", text)
     if match:
         return float(match.group(1))
 
@@ -35,7 +47,9 @@ def clean_price(df: pd.DataFrame, column: str = "price") -> pd.DataFrame:
 
 def parse_area(text: str) -> float | None:
     """Парсит площадь ('50 м²' -> 50.0)."""
-    match = re.search(r"([\d]+(?:\.\d+)?)\s*м[²2]", str(text))
+    if pd.isna(text):
+        return None
+    match = re.search(r"(\d+(?:\.\d+)?)\s*м[²2]", str(text))
     return float(match.group(1)) if match else None
 
 
@@ -51,7 +65,8 @@ def clean_area(df: pd.DataFrame, column: str = "area") -> pd.DataFrame:
 def extract_features(df: pd.DataFrame) -> pd.DataFrame:
     """Извлекает фичи для модели.
 
-    Создает колонки: rooms, area, floor, total_floors, year_built, distance_to_metro_min.
+    Создает колонки: rooms, area, floor, total_floors, year_built,
+    distance_to_metro_min, area_per_room, floor_ratio, building_age.
     """
     features = pd.DataFrame()
 
@@ -68,6 +83,7 @@ def extract_features(df: pd.DataFrame) -> pd.DataFrame:
         features["floor_ratio"] = (features["floor"] - 1) / features["total_floors"].clip(lower=1)
 
     if "year_built" in features.columns:
-        features["building_age"] = 2025 - features["year_built"]
+        current_year = _get_current_year()
+        features["building_age"] = current_year - features["year_built"]
 
     return features

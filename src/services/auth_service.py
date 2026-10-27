@@ -13,6 +13,9 @@ from src.repositories.user_repository import UserRepository
 
 log = get_logger(__name__)
 
+# Одинаковое сообщение для защиты от user enumeration
+_AUTH_ERROR = "Invalid email or password"
+
 
 class AuthService:
     """Бизнес-логика аутентификации."""
@@ -36,18 +39,18 @@ class AuthService:
         """
         existing = await self.user_repo.get_by_email(email)
         if existing:
-            raise ValueError(f"User {email} already exists")
+            raise ValueError("User already exists")
 
         hashed = hash_password(password)
         user = await self.user_repo.create_user(email, hashed)
 
-        token = create_access_token(email)
-        log.info("User registered", email=email)
+        token = create_access_token(str(user.id))
+        log.info("User registered", user_id=user.id)
 
         return {"access_token": token, "token_type": "bearer", "user_id": user.id}
 
     async def login(self, email: str, password: str) -> dict:
-        """Логин пользователя.
+        """Логин пользователя, возвращает JWT.
 
         Args:
             email: Email пользователя.
@@ -57,27 +60,24 @@ class AuthService:
             Словарь с JWT токеном.
 
         Raises:
-            ValueError: Если пользователь не найден или пароль неверный.
+            ValueError: Если учётные данные неверны.
         """
         user = await self.user_repo.get_by_email(email)
-        if not user:
-            raise ValueError("User not found")
+        if user is None or not verify_password(password, user.hashed_password):
+            raise ValueError(_AUTH_ERROR)
 
-        if not verify_password(password, user.hashed_password):
-            raise ValueError("Invalid password")
-
-        token = create_access_token(email)
-        log.info("User logged in", email=email)
+        token = create_access_token(str(user.id))
+        log.info("User logged in", user_id=user.id)
 
         return {"access_token": token, "token_type": "bearer", "user_id": user.id}
 
     async def verify_token(self, token: str) -> str | None:
-        """Проверяет JWT токен и возвращает email.
+        """Проверяет JWT токен и возвращает user_id.
 
         Args:
             token: JWT токен.
 
         Returns:
-            Email пользователя или None.
+            User ID или None.
         """
         return decode_access_token(token)

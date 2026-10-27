@@ -1,10 +1,12 @@
 """Зависимости FastAPI (DI): БД, текущий пользователь, токен."""
 
 from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.core.logging import get_logger
 from src.core.security import decode_access_token
+from src.models.user import User
 
 log = get_logger(__name__)
 
@@ -20,7 +22,7 @@ def set_session_factory(factory: async_sessionmaker):
 
 
 async def get_db() -> AsyncSession:
-    """Dependency: получает сессию БД."""
+    """Dependency: получает сессию БД (генератор)."""
     if _async_session_factory is None:
         raise RuntimeError("Session factory not initialized")
     async with _async_session_factory() as session:
@@ -36,17 +38,29 @@ async def get_token(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header",
+            detail="Invalid or expired token",
         )
     return authorization.split(" ", 1)[1]
 
 
-async def get_current_user(token: str = Depends(get_token)) -> dict:
-    """Dependency: декодирует JWT и возвращает пользователя."""
-    email = decode_access_token(token)
-    if not email:
+async def get_current_user(
+    token: str = Depends(get_token),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Dependency: декодирует JWT, находит пользователя по id и возвращает его данные."""
+    user_id = decode_access_token(token)
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
-    return {"email": email}
+
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    return {"user_id": user.id, "email": user.email}

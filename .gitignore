@@ -46,3 +46,6 @@ alembic/versions/*.pyc
 catboost_info/
 *.joblib
 models/*.joblib
+
+# Scripts
+scripts/

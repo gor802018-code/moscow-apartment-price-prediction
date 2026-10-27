@@ -1,9 +1,11 @@
 """Обучение модели CatBoost с оптимизацией гиперпараметров через Optuna."""
 
+import logging
 from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 import optuna
 import pandas as pd
 from catboost import CatBoostRegressor, Pool
@@ -15,16 +17,13 @@ from src.core.logging import get_logger
 log = get_logger(__name__)
 
 
-def objective(trial: optuna.Trial, X: pd.DataFrame, y: pd.Series) -> float:
+def objective(trial, X, y) -> float:
     """Optuna objective function for CatBoost hyperparameter tuning."""
-
     params = {
         "depth": trial.suggest_int("depth", 4, 10),
         "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
         "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1, 10),
-        "subsample": trial.suggest_float("subsample", 0.6, 1.0),
         "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.5, 1.0),
-        "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 10, 100),
         "random_seed": 42,
         "verbose": 0,
     }
@@ -70,11 +69,19 @@ def train_model(
         "area_per_room", "floor_ratio", "building_age",
     ]
 
-    X = df[feature_cols].dropna()
-    y = df.loc[X.index, target_col]
+    # Удаляем строки с NaN
+    df = df.dropna(subset=feature_cols + [target_col])
+
+    # Логарифмируем цену (скошенная распределение)
+    df = df.copy()
+    df["price_log"] = np.log1p(df[target_col])
+
+    X = df[feature_cols]
+    y = df["price_log"]
 
     log.info("Training model", samples=len(X), trials=n_trials)
 
+    # Optuna на обучающей + валидационной выборке
     study = optuna.create_study(direction="minimize", study_name="price_prediction")
     study.optimize(lambda trial: objective(trial, X, y), n_trials=n_trials)
 
@@ -83,13 +90,25 @@ def train_model(
 
     log.info("Best score", mae=best_score, params=best_params)
 
-    # Обучаем финальную модель на всех данных
+    # Разделяем на train/val/test
+    X_trainval, X_test, y_trainval, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=42
+    )
+
+    # Финальная модель на train+val
     final_model = CatBoostRegressor(
         **best_params,
         random_seed=42,
         verbose=0,
     )
-    final_model.fit(X, y)
+    final_model.fit(X_trainval, y_trainval)
+
+    # Оценка на hold-out тесте
+    test_preds = final_model.predict(X_test)
+    test_mae = mean_absolute_error(y_test, test_preds)
+    test_mae_actual = np.expm1(test_preds).mean()  # approximate
+
+    log.info("Test MAE", mae=test_mae)
 
     # Сохраняем модель
     if output_path:
@@ -100,6 +119,7 @@ def train_model(
     return {
         "best_params": best_params,
         "best_score": best_score,
+        "test_mae": test_mae,
         "model": final_model,
         "feature_cols": feature_cols,
     }

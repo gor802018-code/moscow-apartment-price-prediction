@@ -25,7 +25,7 @@ def create_access_token(subject: str, expires_delta: int | None = None) -> str:
     """Создаёт JWT токен.
 
     Args:
-        subject: Subject токена (обычно email).
+        subject: Subject токена (user_id).
         expires_delta: Время жизни в минутах (по умолчанию из настроек).
 
     Returns:
@@ -50,7 +50,7 @@ def decode_access_token(token: str) -> str | None:
         token: JWT токен для декодирования.
 
     Returns:
-        Subject токена или None при ошибке.
+        Subject токена (user_id) или None при ошибке.
     """
     settings = get_settings()
     try:

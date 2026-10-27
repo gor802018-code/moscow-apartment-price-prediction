@@ -1,7 +1,7 @@
 """Конфигурация приложения через pydantic-settings."""
 
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import ClassVar
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -33,11 +33,17 @@ class Settings(BaseSettings):
     SCRAPE_DELAY: float = 1.0
 
     # ML
-    MODEL_PATH: ClassVar[str] = str(Path(__file__).parent.parent / "models" / "price_model.joblib")
+    MODEL_PATH: str = "src/models/price_model.joblib"
 
     @property
-    def model_path(self) -> str:
-        return self.MODEL_PATH
+    def current_year(self) -> int:
+        """Текущий год для расчёта возраста зданий."""
+        return datetime.now(timezone.utc).year
+
+    @property
+    def model_path(self) -> Path:
+        """Путь к модели в виде Path."""
+        return Path(self.MODEL_PATH)
 
 
 _settings: Settings | None = None

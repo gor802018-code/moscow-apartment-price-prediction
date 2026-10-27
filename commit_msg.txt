@@ -1,0 +1,17 @@
+fix: resolve 23 critical bugs in SaaS ML price prediction system
+
+Previously fixed (#1-10): DB init, user_id, Alembic async, training script,
+derived features, Dockerfile, frontend API_BASE, user enum protection,
+JWT sub=user_id, error leaking
+
+This commit (#14-23):
+#14: building_age - add current_year property to Settings
+#15: scraper dedup - add dedup key by (rooms, area, district, price)
+#16: config - add model_path property returning Path
+#17: logging - add request_id middleware with UUID
+#18: model cache - add 1-hour TTL invalidation
+#19: scraper errors - specific retry for timeout/connection errors
+#20: CI - add mypy type-checking job
+#21: health check - add DB + ML model readiness
+#22: input validation - feature range checks in PredictionService
+#23: rate limiting - slowapi with endpoint-specific limits

@@ -5,7 +5,8 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir poetry
 
-COPY pyproject.toml poetry.lock* ./
+COPY pyproject.toml ./
+RUN poetry config virtualenvs.create false
 RUN poetry install --only main --no-interaction --no-ansi
 
 # Stage 2: Runtime
@@ -15,13 +16,15 @@ WORKDIR /app
 
 RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
 
-COPY --from=builder /root/.local /home/appuser/.local
+# Копируем установленные пакеты
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-ENV PATH=/home/appuser/.local/bin:$PATH
-
+# Копируем код и конфигурацию
 COPY pyproject.toml ./
 COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
 
 RUN chown -R appuser:appuser /app
 
