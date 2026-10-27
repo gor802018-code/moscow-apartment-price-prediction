@@ -1,1 +1,5 @@
-feat: add streamlit client with jwt auth and docker-compose
+ci: add GitHub Actions pipeline
+
+- lint: ruff check + format
+- test: pytest with PostgreSQL service
+- docker-build: build API image with caching
