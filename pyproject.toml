@@ -13,6 +13,7 @@ fastapi = "^0.110.0"
 uvicorn = { extras = ["standard"], version = "^0.27.0" }
 pydantic = "^2.6.0"
 pydantic-settings = "^2.1.0"
+email-validator = "^2.1.0"
 python-jose = { extras = ["cryptography"], version = "^3.3.0" }
 passlib = { extras = ["bcrypt"], version = "^1.7.4" }
 

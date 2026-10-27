@@ -41,3 +41,8 @@ htmlcov/
 
 # Migrations
 alembic/versions/*.pyc
+
+# ML artifacts
+catboost_info/
+*.joblib
+models/*.joblib
