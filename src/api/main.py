@@ -28,10 +28,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Роутеры
-app.include_router(health.router, prefix="/api")
-app.include_router(auth.router, prefix="/api")
-app.include_router(prediction.router, prefix="/api")
+# Роутеры v1
+app.include_router(health.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(prediction.router, prefix="/api/v1")
 
 
 def init_app(session_factory: async_sessionmaker):

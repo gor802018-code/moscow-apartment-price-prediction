@@ -60,7 +60,7 @@ class TestHealth:
 
     @pytest.mark.asyncio
     async def test_health(self, client):
-        response = await client.get("/api/health")
+        response = await client.get("/api/v1/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
 
@@ -70,7 +70,7 @@ class TestAuth:
 
     @pytest.mark.asyncio
     async def test_register(self, client):
-        response = await client.post("/api/auth/register", json={
+        response = await client.post("/api/v1/auth/register", json={
             "email": "test@example.com",
             "password": "SecurePass123!",
         })
@@ -83,22 +83,22 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_register_duplicate(self, client):
         payload = {"email": "dup@example.com", "password": "SecurePass123!"}
-        r1 = await client.post("/api/auth/register", json=payload)
+        r1 = await client.post("/api/v1/auth/register", json=payload)
         assert r1.status_code == 201, f"First register failed: {r1.json()}"
 
-        r2 = await client.post("/api/auth/register", json=payload)
+        r2 = await client.post("/api/v1/auth/register", json=payload)
         assert r2.status_code == 409
 
     @pytest.mark.asyncio
     async def test_login(self, client):
         # Сначала регистрируем
-        await client.post("/api/auth/register", json={
+        await client.post("/api/v1/auth/register", json={
             "email": "login@example.com",
             "password": "SecurePass123!",
         })
 
         # Затем логинимся
-        response = await client.post("/api/auth/login", json={
+        response = await client.post("/api/v1/auth/login", json={
             "email": "login@example.com",
             "password": "SecurePass123!",
         })
@@ -108,12 +108,12 @@ class TestAuth:
 
     @pytest.mark.asyncio
     async def test_login_wrong_password(self, client):
-        await client.post("/api/auth/register", json={
+        await client.post("/api/v1/auth/register", json={
             "email": "wrong@example.com",
             "password": "CorrectPass123!",
         })
 
-        response = await client.post("/api/auth/login", json={
+        response = await client.post("/api/v1/auth/login", json={
             "email": "wrong@example.com",
             "password": "WrongPassword!",
         })
@@ -121,7 +121,7 @@ class TestAuth:
 
     @pytest.mark.asyncio
     async def test_login_not_found(self, client):
-        response = await client.post("/api/auth/login", json={
+        response = await client.post("/api/v1/auth/login", json={
             "email": "missing@example.com",
             "password": "SomePassword1!",
         })
@@ -145,22 +145,21 @@ class TestPrediction:
     @pytest.mark.asyncio
     async def test_predict_unauthorized(self, client, valid_prediction):
         """Предсказание без токена возвращает 401."""
-        response = await client.post("/api/predict", json=valid_prediction)
+        response = await client.post("/api/v1/predict", json=valid_prediction)
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_predict_success(self, client, valid_prediction):
         """Успешное предсказание с токеном."""
-        # Мокаем модель, чтобы не нужно было реальной .joblib
         dummy_model = MagicMock(predict=lambda X: [8500000.0] * len(X))
 
-        with patch("src.api.routers.prediction.ModelRepository") as mock_model_repo:
+        with patch("src.services.prediction_service.ModelRepository") as mock_model_repo:
             mock_instance = MagicMock()
             mock_instance.model = dummy_model
             mock_model_repo.return_value = mock_instance
 
             # Регистрируемся
-            reg_resp = await client.post("/api/auth/register", json={
+            reg_resp = await client.post("/api/v1/auth/register", json={
                 "email": "pred@example.com",
                 "password": "SecurePass123!",
             })
@@ -169,9 +168,9 @@ class TestPrediction:
 
             # Делаем предсказание
             headers = {"Authorization": f"Bearer {token}"}
-            pred_resp = await client.post("/api/predict", json=valid_prediction, headers=headers)
+            pred_resp = await client.post("/api/v1/predict", json=valid_prediction, headers=headers)
 
-            assert pred_resp.status_code == 200, f"Predict failed: {pred_resp.json()}"
+            assert pred_resp.status_code == 201, f"Predict failed: {pred_resp.json()}"
             data = pred_resp.json()
             assert "id" in data
             assert "predicted_price" in data
@@ -182,13 +181,13 @@ class TestPrediction:
         """История предсказаний с токеном."""
         dummy_model = MagicMock(predict=lambda X: [8500000.0] * len(X))
 
-        with patch("src.api.routers.prediction.ModelRepository") as mock_model_repo:
+        with patch("src.services.prediction_service.ModelRepository") as mock_model_repo:
             mock_instance = MagicMock()
             mock_instance.model = dummy_model
             mock_model_repo.return_value = mock_instance
 
             # Регистрируемся
-            reg_resp = await client.post("/api/auth/register", json={
+            reg_resp = await client.post("/api/v1/auth/register", json={
                 "email": "hist@example.com",
                 "password": "SecurePass123!",
             })
@@ -197,11 +196,11 @@ class TestPrediction:
 
             # Делаем предсказание
             headers = {"Authorization": f"Bearer {token}"}
-            pred_resp = await client.post("/api/predict", json=valid_prediction, headers=headers)
-            assert pred_resp.status_code == 200, f"Predict failed: {pred_resp.json()}"
+            pred_resp = await client.post("/api/v1/predict", json=valid_prediction, headers=headers)
+            assert pred_resp.status_code == 201, f"Predict failed: {pred_resp.json()}"
 
             # Получаем историю
-            hist_resp = await client.get("/api/predict/history", headers=headers)
+            hist_resp = await client.get("/api/v1/predict/history", headers=headers)
             assert hist_resp.status_code == 200, f"History failed: {hist_resp.json()}"
             data = hist_resp.json()
             assert "predictions" in data
@@ -209,5 +208,5 @@ class TestPrediction:
     @pytest.mark.asyncio
     async def test_history_unauthorized(self, client):
         """История без токена возвращает 401."""
-        response = await client.get("/api/predict/history")
+        response = await client.get("/api/v1/predict/history")
         assert response.status_code == 401
