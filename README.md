@@ -1,6 +1,6 @@
 # Project — Предсказание цен на квартиры в Москве
 
-[![CI](https://github.com/shq_shq/moscow-apartment-price-prediction/actions/workflows/ci.yml/badge.svg)](https://github.com/shq_shq/moscow-apartment-price-prediction/actions/workflows/ci.yml)
+[![CI](https://github.com/gor802018-code/moscow-apartment-price-prediction/actions/workflows/ci.yml/badge.svg)](https://github.com/gor802018-code/moscow-apartment-price-prediction/actions/workflows/ci.yml)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com)
