@@ -92,5 +92,9 @@ catboost_info/
 *.joblib
 models/*.joblib
 
+# Датасеты (скачиваются отдельно, в репозитории не хранятся)
+data/*.csv
+data/*.parquet
+
 # Обученные модели (создаются scripts/train_model.py)
 artifacts/*.joblib

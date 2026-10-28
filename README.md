@@ -113,6 +113,66 @@ services:
 API внутри сети compose по-прежнему подключается к `db:5432`, снаружи БД будет доступна на
 `localhost:5433`.
 
+## Данные и качество модели
+
+Модель обучается на CSV с колонками `rooms, area, floor, total_floors, year_built,
+distance_to_metro_min, price` (цена в рублях). Файл кладётся в `data/train.csv`; и данные, и
+обученная модель в git не коммитятся.
+
+**Источник данных текущей модели** — открытый датасет
+[Moscow-apartment-price-prediction](https://github.com/ded0inside/Moscow-apartment-price-prediction)
+(MIT): 6983 объявления о продаже квартир в Москве с Cian, ноябрь 2023. Поля источника
+переименовываются в признаки модели: `number_of_rooms → rooms`, `total_area → area`,
+`floor → floor`, `number_of_floors → total_floors`, `construction_year → year_built`,
+`min_to_metro → distance_to_metro_min`, `price → price`.
+
+Подготовка `data/train.csv` (6983 → 5625 строк: отброшено 1307 строк с пропусками — в основном
+1222 без года постройки, и 51 выброс по диапазонам цены, площади, этажа, года и удалённости
+от метро):
+
+```python
+import pandas as pd
+
+raw = pd.read_csv("moscow_flats_dataset_eng.csv")
+df = pd.DataFrame(
+    {
+        "rooms": raw["number_of_rooms"],
+        "area": raw["total_area"],
+        "floor": raw["floor"],
+        "total_floors": raw["number_of_floors"],
+        "year_built": raw["construction_year"],
+        "distance_to_metro_min": raw["min_to_metro"],
+        "price": raw["price"],
+    }
+).dropna()
+df = df[
+    df["price"].between(1_000_000, 500_000_000)
+    & df["area"].between(9, 300)
+    & df["rooms"].between(1, 6)
+    & (df["floor"] >= 1)
+    & (df["floor"] <= df["total_floors"])
+    & df["total_floors"].between(1, 100)
+    & df["year_built"].between(1800, 2026)
+    & df["distance_to_metro_min"].between(0, 120)
+]
+df.to_csv("data/train.csv", index=False)
+```
+
+Обучение: `poetry run python -m scripts.train_model --data data/train.csv --n-trials 50`
+(CatBoost + подбор гиперпараметров Optuna, таргет `log1p(price)`).
+
+| Выборка | MAE | MAPE |
+|---|---|---|
+| hold-out 20 % реальных данных (1125 строк) | 12.7 млн ₽ | 24.2 % |
+| синтетика (`--data` не передан, 1000 строк) | 0.4 млн ₽ | 4.8 % |
+
+Синтетический режим — только для демо запуска: данные генерируются формулой, поэтому его
+метрики ничего не говорят о реальном качестве. Ошибка около 24 % на реальных объявлениях —
+следствие узкого набора признаков (нет района, класса жилья, ремонта и состояния дома).
+
+Лицензия датасета — MIT, но исходные объявления принадлежат Cian, поэтому данные в этом
+репозитории не публикуются: их скачивают из источника, соблюдая условия сайта.
+
 ## API Документация
 
 Базовый URL: `http://localhost:8000/api/v1`
