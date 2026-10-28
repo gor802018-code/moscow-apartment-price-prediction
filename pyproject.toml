@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "ML-модель предсказания цен на квартиры в Москве с автоматическим сбором данных"
 authors = ["Dev <dev@example.com>"]
 readme = "README.md"
+packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -57,6 +58,15 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "B", "A", "C4", "UP"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# X_train / X_test — общепринятое соглашение sklearn/CatBoost, переименование ухудшает читаемость
+"src/training/*.py" = ["N803", "N806"]
+"tests/*.py" = ["N803", "N806"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Depends()/Header() в значениях по умолчанию — штатный приём FastAPI, а не ошибка B008
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

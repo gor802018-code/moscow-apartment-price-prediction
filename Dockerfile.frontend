@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir streamlit requests
+RUN pip install --no-cache-dir "streamlit>=1.31,<2" "requests>=2.31,<3"
 
 COPY src/frontend/app.py ./app.py
 

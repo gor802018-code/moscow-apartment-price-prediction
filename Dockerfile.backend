@@ -5,9 +5,12 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir poetry
 
-COPY pyproject.toml ./
-RUN poetry config virtualenvs.create false
-RUN poetry install --only main --no-interaction --no-ansi
+# poetry.lock копируем обязательно — иначе зависимости ставятся не те, что зафиксированы.
+# --no-root: сам проект как пакет не устанавливаем (его код копируется ниже),
+# иначе poetry требует README.md и каталог пакета и падает.
+COPY pyproject.toml poetry.lock ./
+RUN poetry config virtualenvs.create false \
+    && poetry install --only main --no-root --no-interaction --no-ansi
 
 # Stage 2: Runtime
 FROM python:3.11-slim AS runtime
@@ -20,16 +23,21 @@ RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuse
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Копируем код и конфигурацию
-COPY pyproject.toml ./
+# Копируем код и конфигурацию (alembic нужен, чтобы применять миграции при старте)
 COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-RUN chown -R appuser:appuser /app
+# Модель (artifacts/price_model.joblib) не хранится в git — монтируется томом, см. docker-compose.yml
+RUN mkdir -p artifacts && chown -R appuser:appuser /app
 
 USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 200 только если доступны и БД, и модель
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=4)"
+
+# Сначала миграции, потом сервер (раньше таблицы нигде не создавались)
+CMD ["sh", "-c", "alembic upgrade head && uvicorn src.api.main:app --host 0.0.0.0 --port 8000"]

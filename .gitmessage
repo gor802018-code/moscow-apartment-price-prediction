@@ -1,6 +1,5 @@
-style: fix ruff linting issues
-
-- Auto-fix import sorting, unused imports, whitespace
-- Add from __future__ import annotations to models
-- Add noqa for forward references in SQLAlchemy relationships
-- Update Dockerfile.frontend for API_BASE env var
+# <type>(<scope>): <краткое описание, до 72 символов>
+#
+# Что и почему изменено (по желанию):
+#
+# type: feat | fix | docs | style | refactor | test | chore

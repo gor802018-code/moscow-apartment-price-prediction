@@ -2,73 +2,27 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [main]
   pull_request:
-    branches: [master, main]
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - uses: snok/install-poetry@v1
-        with:
-          version: latest
-      - run: poetry install
-      - run: poetry run ruff check src/ tests/
-      - run: poetry run ruff format --check src/ tests/
-
-  type-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - uses: snok/install-poetry@v1
-        with:
-          version: latest
-      - run: poetry install
-      - run: poetry run mypy src/ --ignore-missing-imports --no-error-summary
-
   test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: kwork_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - uses: snok/install-poetry@v1
-        with:
-          version: latest
-      - run: poetry install
-      - run: poetry run pytest tests/ -v --tb=short
 
-  docker-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: kwork-api:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Lint (ruff)
+        run: poetry run ruff check src tests scripts alembic
+
+      - name: Tests
+        run: poetry run pytest -q

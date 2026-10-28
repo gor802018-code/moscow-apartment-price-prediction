@@ -7,7 +7,7 @@ Production-ready SaaS для портфолио: ML-модель предска�
 | Категория | Технологии |
 |-----------|------------|
 | **Язык** | Python 3.11+, Poetry |
-| **API** | FastAPI, Pydantic v2, JWT (python-jose), passlib/bcrypt |
+| **API** | FastAPI, Pydantic v2, JWT (python-jose), passlib (PBKDF2-SHA256), slowapi (rate limiting) |
 | **БД** | PostgreSQL 16, SQLAlchemy 2.0 (async), Alembic, asyncpg |
 | **ML** | CatBoost, Optuna (hyperparameter tuning), scikit-learn, pandas |
 | **Парсинг** | Playwright, BeautifulSoup4, tenacity (retries) |
@@ -63,6 +63,17 @@ Production-ready SaaS для портфолио: ML-модель предска�
 # Установка зависимостей
 poetry install
 
+# Настройки (при необходимости поправьте значения)
+cp .env.example .env
+
+# Применить миграции БД (PostgreSQL должен быть запущен)
+poetry run alembic upgrade head
+
+# Обучить модель -> artifacts/price_model.joblib
+# Без --data берутся СИНТЕТИЧЕСКИЕ данные (подходит только для демо)
+poetry run python -m scripts.train_model
+poetry run python -m scripts.train_model --data data/train.csv --n-trials 50
+
 # Запуск API (dev mode)
 poetry run uvicorn src.api.main:app --reload --port 8000
 
@@ -73,7 +84,10 @@ poetry run streamlit run src/frontend/app.py --server.port 8501
 ### Docker Compose
 
 ```bash
-# Запуск всех сервисов (API + DB + Frontend)
+# 1. Обучить модель на хосте (папка artifacts/ монтируется в контейнер API)
+poetry run python -m scripts.train_model
+
+# 2. Запуск всех сервисов (API + DB + Frontend). Миграции применяются при старте API.
 docker compose up --build
 
 # Сервисы доступны по адресам:
@@ -81,6 +95,10 @@ docker compose up --build
 # Frontend: http://localhost:8501
 # DB:       localhost:5432
 ```
+
+Без файла `artifacts/price_model.joblib` API стартует, но `/health` вернёт 503, а `/predict` — 503
+(«Model is not available»). В продакшене задайте `ENVIRONMENT=production` и свой `SECRET_KEY`
+(с дефолтным ключом приложение не запустится).
 
 ## API Документация
 
@@ -90,12 +108,14 @@ docker compose up --build
 
 | Method | Path | Auth | Описание |
 |--------|------|------|----------|
-| GET | `/health` | ✗ | Проверка работоспособности |
+| GET | `/health` | ✗ | Проверка API, БД и ML-модели |
 
-**Response:**
+**Response (200, всё доступно):**
 ```json
-{"status": "ok"}
+{"status": "healthy", "checks": {"database": "ok", "model": {"status": "ok"}}}
 ```
+
+Если БД или модель недоступны, статус ответа **503**, а `status` = `"degraded"`.
 
 ### Аутентификация
 
@@ -146,9 +166,12 @@ docker compose up --build
   "id": 1,
   "input_features": {"rooms": 2, "area": 50.0, ...},
   "predicted_price": 8500000.0,
-  "created_at": "2026-10-27 14:30:00"
+  "created_at": "2026-10-27T14:30:00+00:00"
 }
 ```
+
+**Коды ошибок `/predict`:** `401` — нет/просрочен токен, `422` — невалидные данные
+(в т.ч. `floor` > `total_floors`), `429` — превышен лимит, `503` — модель недоступна.
 
 **Response (GET /history):**
 ```json
@@ -158,7 +181,7 @@ docker compose up --build
       "id": 1,
       "input_features": {...},
       "predicted_price": 8500000.0,
-      "created_at": "2026-10-27 14:30:00"
+      "created_at": "2026-10-27T14:30:00+00:00"
     }
   ]
 }
@@ -170,6 +193,20 @@ docker compose up --build
 ```
 Authorization: Bearer <jwt_token>
 ```
+
+Subject токена — `user_id`. Email регистронезависим (`A@x.com` и `a@x.com` — один пользователь).
+
+### Rate limiting
+
+| Эндпоинт | Лимит |
+|----------|-------|
+| `POST /auth/register` | 5 в час |
+| `POST /auth/login` | 10 в минуту |
+| `POST /predict` | 10 в минуту |
+| `GET /predict/history` | 30 в минуту |
+
+Лимиты считаются по IP и хранятся в памяти процесса (при нескольких воркерах/репликах
+нужно общее хранилище, например Redis). В тестах лимитер отключён.
 
 ## Схема БД
 
@@ -187,8 +224,8 @@ Authorization: Bearer <jwt_token>
 | Колонка | Тип | Описание |
 |---------|-----|----------|
 | `id` | INTEGER (PK) | Автоинкремент |
-| `user_id` | INTEGER (FK → users) | CASCADE DELETE |
-| `input_features` | JSONB | Входные фичи |
+| `user_id` | INTEGER (FK → users) | CASCADE DELETE, индекс |
+| `input_features` | JSONB (PostgreSQL) / JSON (SQLite в тестах) | Входные фичи |
 | `predicted_price` | FLOAT | Предсказанная цена |
 | `created_at` | TIMESTAMP | server_default=now() |
 
@@ -218,6 +255,7 @@ src/
 ├── core/                 # Ядро
 │   ├── config.py         # pydantic-settings
 │   ├── security.py       # JWT, хэширование
+│   ├── rate_limiter.py   # slowapi
 │   └── logging.py        # structlog
 ├── ingestion/            # Парсинг
 │   └── scraper.py
@@ -225,9 +263,14 @@ src/
 │   ├── loader.py
 │   └── preprocessing.py
 ├── training/             # Обучение ML
-│   └── train.py
+│   ├── train.py          # CatBoost + Optuna (hold-out без утечки)
+│   └── model.py          # обёртка: predict() возвращает рубли (модель учится на log1p)
 └── frontend/             # Streamlit
     └── app.py
+scripts/
+└── train_model.py        # python -m scripts.train_model
+alembic/                  # миграции БД
+artifacts/                # обученная модель (не в git)
 tests/
 ├── test_core.py          # Security + Config
 ├── test_models.py        # SQLAlchemy models
@@ -256,9 +299,8 @@ poetry run pytest tests/test_api.py -v
 ## CI/CD
 
 GitHub Actions запускает:
-- **lint** — ruff check + format
-- **test** — pytest с PostgreSQL сервисом
-- **docker-build** — сборка образа API
+- **lint** — `ruff check` (пока не блокирует сборку)
+- **test** — pytest (БД в тестах — SQLite in-memory)
 
 Конфиг: `.github/workflows/ci.yml`
 

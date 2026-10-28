@@ -16,12 +16,25 @@ env/
 # IDE
 .vscode/
 .idea/
+.fleet/
+.zed/
+.history/
+*.iml
 *.swp
 *.swo
+
+# Локальные планы/настройки агента
+.gigacode/
+.claude/
+.cursor/
+.continue/
+.aider*
+AGENTS.md
 
 # Environment
 .env
 .env.*
+!.env.example
 
 # Docker
 node_modules/
@@ -31,9 +44,18 @@ staticfiles/
 .DS_Store
 Thumbs.db
 
-# Tests
+# Кэши тестов и инструментов
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.hypothesis/
+.tox/
+.nox/
+.cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 
 # Jupyter
@@ -42,10 +64,19 @@ htmlcov/
 # Migrations
 alembic/versions/*.pyc
 
+# Логи и временные файлы
+*.log
+*.log.*
+*.tmp
+*.bak
+*.orig
+Desktop.ini
+.Trash-*
+
 # ML artifacts
 catboost_info/
 *.joblib
 models/*.joblib
 
-# Scripts
-scripts/
+# Обученные модели (создаются scripts/train_model.py)
+artifacts/*.joblib
