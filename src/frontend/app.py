@@ -8,8 +8,34 @@ import streamlit as st
 API_BASE = os.getenv("API_BASE", "http://localhost:8000/api/v1")
 TIMEOUT = 10  # секунд; без таймаута зависший API подвешивает всю страницу
 
-st.set_page_config(page_title="Kwork ML — Предсказание цен", page_icon="🏠", layout="centered")
+st.set_page_config(page_title="Project — Предсказание цен", page_icon="🏠", layout="centered")
 st.title("🏠 Предсказание цен на квартиры в Москве")
+
+# Подписи и формат для фич из ответа API — в интерфейс не должен попадать сырой dict
+_FEATURE_ROWS = (
+    ("rooms", "Комнаты", None),
+    ("area", "Площадь, м²", "{:g}"),
+    ("floor", "Этаж", None),
+    ("total_floors", "Всего этажей", None),
+    ("year_built", "Год постройки", None),
+    ("distance_to_metro_min", "До метро, мин", "{:g}"),
+)
+
+
+def feature_rows(features: dict) -> dict[str, str]:
+    """Приводит фичи к парам «подпись — значение» для таблицы."""
+    rows: dict[str, str] = {}
+    for key, label, fmt in _FEATURE_ROWS:
+        value = features.get(key)
+        if value is None:
+            continue
+        rows[label] = fmt.format(value) if fmt else str(value)
+    return rows
+
+
+def features_summary(features: dict) -> str:
+    """Однострочное описание фич для истории предсказаний."""
+    return " · ".join(f"{label}: {value}" for label, value in feature_rows(features).items())
 
 
 def error_message(resp: requests.Response) -> str:
@@ -119,7 +145,14 @@ else:
                 if resp.status_code == 201:
                     data = resp.json()
                     st.success(f"💰 Предсказанная цена: {data['predicted_price']:,.0f} ₽")
-                    st.info(f"📊 Фичи: {data['input_features']}")
+                    st.markdown("**Параметры квартиры**")
+                    st.dataframe(
+                        [
+                            {"Параметр": label, "Значение": value}
+                            for label, value in feature_rows(data["input_features"]).items()
+                        ],
+                        hide_index=True,
+                    )
                 elif resp.status_code == 401:
                     # Токен истёк — возвращаем на форму входа
                     logout()
@@ -138,7 +171,10 @@ else:
             predictions = resp.json()["predictions"]
             if predictions:
                 for pred in predictions:
-                    st.write(f"- **{pred['predicted_price']:,.0f} ₽** — {pred['input_features']}")
+                    st.write(
+                        f"- **{pred['predicted_price']:,.0f} ₽** — "
+                        f"{features_summary(pred['input_features'])}"
+                    )
             else:
                 st.info("История пуста")
         elif resp.status_code == 401:
