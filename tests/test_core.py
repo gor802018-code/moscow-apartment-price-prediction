@@ -59,12 +59,16 @@ class TestSecurity:
 
 
 class TestSettings:
-    """Тесты настроек."""
+    """Тесты настроек.
+
+    `_env_file=None` — тесты не должны зависеть от локального .env разработчика: иначе его
+    SECRET_KEY подменяет дефолтный и проверку «production запрещает дефолтный ключ» не проверить.
+    """
 
     def test_settings_default_values(self):
         """Значения по умолчанию загружаются."""
         with patch.dict("os.environ", {}, clear=True):
-            settings = Settings()
+            settings = Settings(_env_file=None)
             assert settings.APP_NAME == "Kwork ML"
             assert settings.ALGORITHM == "HS256"
             assert settings.ACCESS_TOKEN_EXPIRE_MINUTES == 30
@@ -72,7 +76,7 @@ class TestSettings:
     def test_settings_from_env(self):
         """Настройки переопределяются через окружение."""
         with patch.dict("os.environ", {"APP_NAME": "TestApp", "DEBUG": "true"}):
-            settings = Settings()
+            settings = Settings(_env_file=None)
             assert settings.APP_NAME == "TestApp"
             assert settings.DEBUG is True
 
@@ -81,14 +85,14 @@ class TestSettings:
 
         with patch.dict("os.environ", {"ENVIRONMENT": "production"}, clear=True):
             with pytest.raises(ValueError):
-                Settings()
+                Settings(_env_file=None)
 
     def test_custom_secret_allowed_in_production(self):
         env = {"ENVIRONMENT": "production", "SECRET_KEY": "x" * 32}
         with patch.dict("os.environ", env, clear=True):
-            assert Settings().is_production
+            assert Settings(_env_file=None).is_production
 
     def test_model_path_is_independent_of_cwd(self):
         """Относительный MODEL_PATH считается от корня проекта, а не от текущего каталога."""
         with patch.dict("os.environ", {}, clear=True):
-            assert Settings().model_path.is_absolute()
+            assert Settings(_env_file=None).model_path.is_absolute()
