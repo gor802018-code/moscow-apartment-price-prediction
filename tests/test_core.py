@@ -48,11 +48,14 @@ class TestSecurity:
         result = decode_access_token("invalid.token.here")
         assert result is None
 
-    def test_token_expires(self):
-        """Токен с нулевым TTL валиден сразу после создания."""
-        token = create_access_token("test@example.com", expires_delta=0)
-        subject = decode_access_token(token)
-        assert subject == "test@example.com"
+    def test_expired_token_is_rejected(self):
+        """Токен с отрицательным TTL уже просрочен (раньше TTL=0 молча менялся на дефолтный)."""
+        token = create_access_token("test@example.com", expires_delta=-1)
+        assert decode_access_token(token) is None
+
+    def test_custom_ttl_is_valid(self):
+        token = create_access_token("test@example.com", expires_delta=5)
+        assert decode_access_token(token) == "test@example.com"
 
 
 class TestSettings:
@@ -72,3 +75,20 @@ class TestSettings:
             settings = Settings()
             assert settings.APP_NAME == "TestApp"
             assert settings.DEBUG is True
+
+    def test_default_secret_forbidden_in_production(self):
+        import pytest
+
+        with patch.dict("os.environ", {"ENVIRONMENT": "production"}, clear=True):
+            with pytest.raises(ValueError):
+                Settings()
+
+    def test_custom_secret_allowed_in_production(self):
+        env = {"ENVIRONMENT": "production", "SECRET_KEY": "x" * 32}
+        with patch.dict("os.environ", env, clear=True):
+            assert Settings().is_production
+
+    def test_model_path_is_independent_of_cwd(self):
+        """Относительный MODEL_PATH считается от корня проекта, а не от текущего каталога."""
+        with patch.dict("os.environ", {}, clear=True):
+            assert Settings().model_path.is_absolute()

@@ -76,6 +76,23 @@ class TestParseListing:
         assert result["rooms"] == 2
         assert result["district"] == "р-н Арбат"
 
+    def test_price_not_confused_with_rooms_or_area(self):
+        """Регрессия: цена бралась из первого попавшегося числа (например, '2 комнаты')."""
+        html = """
+        <div class="card">
+            <span>2 комнаты</span><span>50 м²</span>
+            <span>5,5 млн ₽</span><span>тел. 8 495 123-45-67</span>
+        </div>
+        """
+        result = parse_listing(html)
+        assert result["price"] == 5_500_000
+        assert result["area"] == 50.0
+        assert result["rooms"] == 2
+
+    def test_price_with_non_breaking_spaces(self):
+        html = '<div class="card"><span>12\u202f500\u202f000 ₽</span><span>40 м²</span></div>'
+        assert parse_listing(html)["price"] == 12_500_000
+
     def test_empty_listing(self):
         html = "<div class='listing-card'><p>No data</p></div>"
         result = parse_listing(html)

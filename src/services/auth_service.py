@@ -1,11 +1,13 @@
 """Сервис аутентификации."""
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.logging import get_logger
 from src.core.security import (
     create_access_token,
     decode_access_token,
+    dummy_verify,
     hash_password,
     verify_password,
 )
@@ -37,12 +39,19 @@ class AuthService:
         Raises:
             ValueError: Если пользователь уже существует.
         """
+        email = self._normalize_email(email)
         existing = await self.user_repo.get_by_email(email)
         if existing:
             raise ValueError("User already exists")
 
         hashed = hash_password(password)
-        user = await self.user_repo.create_user(email, hashed)
+        try:
+            user = await self.user_repo.create_user(email, hashed)
+        except IntegrityError as exc:
+            # Два параллельных запроса с одним email: проверка выше прошла у обоих,
+            # а уникальный индекс в БД сработал только у второго.
+            await self.session.rollback()
+            raise ValueError("User already exists") from exc
 
         token = create_access_token(str(user.id))
         log.info("User registered", user_id=user.id)
@@ -62,14 +71,24 @@ class AuthService:
         Raises:
             ValueError: Если учётные данные неверны.
         """
-        user = await self.user_repo.get_by_email(email)
-        if user is None or not verify_password(password, user.hashed_password):
+        user = await self.user_repo.get_by_email(self._normalize_email(email))
+        if user is None:
+            # Тратим то же время, что и на проверку реального пароля, чтобы по времени ответа
+            # нельзя было отличить «нет такого email» от «неверный пароль».
+            dummy_verify()
+            raise ValueError(_AUTH_ERROR)
+        if not verify_password(password, user.hashed_password):
             raise ValueError(_AUTH_ERROR)
 
         token = create_access_token(str(user.id))
         log.info("User logged in", user_id=user.id)
 
         return {"access_token": token, "token_type": "bearer", "user_id": user.id}
+
+    @staticmethod
+    def _normalize_email(email: str) -> str:
+        """Email регистронезависим: 'A@x.com' и 'a@x.com' — один пользователь."""
+        return email.strip().lower()
 
     async def verify_token(self, token: str) -> str | None:
         """Проверяет JWT токен и возвращает user_id.

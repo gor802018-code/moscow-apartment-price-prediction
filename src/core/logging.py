@@ -7,16 +7,6 @@ import structlog
 from structlog.contextvars import clear_contextvars
 
 
-def _request_id_processor(logger, method_name, event_dict):
-    """Добавляет request_id в каждый лог."""
-    from structlog.contextvars import get_contextvars
-    ctx = get_contextvars()
-    request_id = ctx.get("request_id")
-    if request_id:
-        event_dict["request_id"] = request_id
-    return event_dict
-
-
 def setup_logging(
     level: int = logging.INFO,
     structured: bool = False,
@@ -27,28 +17,34 @@ def setup_logging(
         level: Уровень логирования.
         structured: True для JSON-лога (продакшен), False для консоли.
     """
-    base_processors = [
+    # merge_contextvars подмешивает всё, что добавлено через bind_contextvars (в т.ч. request_id)
+    shared = [
         structlog.contextvars.merge_contextvars,
-        _request_id_processor,
         structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
     ]
 
     if structured:
-        base_processors.append(structlog.processors.JSONRenderer())
+        processors = [
+            *shared,
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ]
     else:
-        base_processors.extend([
+        processors = [
+            *shared,
             structlog.processors.StackInfoRenderer(),
             structlog.dev.set_exc_info,
-            structlog.processors.TimeStamper(fmt="iso"),
             structlog.dev.ConsoleRenderer(),
-        ])
+        ]
 
     structlog.configure(
-        processors=base_processors,
+        processors=processors,
         wrapper_class=structlog.make_filtering_bound_logger(level),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=True,
+        # False, чтобы повторный вызов setup_logging() (например, в lifespan) реально применялся
+        cache_logger_on_first_use=False,
     )
 
 

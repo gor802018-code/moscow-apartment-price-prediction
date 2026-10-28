@@ -21,6 +21,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def dummy_verify() -> None:
+    """Фиктивная проверка пароля: выравнивает время ответа, если пользователь не найден."""
+    pwd_context.dummy_verify()
+
+
 def create_access_token(subject: str, expires_delta: int | None = None) -> str:
     """Создаёт JWT токен.
 
@@ -32,13 +37,16 @@ def create_access_token(subject: str, expires_delta: int | None = None) -> str:
         Закодированный JWT токен.
     """
     settings = get_settings()
-    expire_minutes = expires_delta or settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    expires = datetime.now(UTC) + timedelta(minutes=expire_minutes)
+    # `is not None`, а не `or`: иначе нулевой/отрицательный TTL молча заменялся бы на дефолтный
+    expire_minutes = (
+        expires_delta if expires_delta is not None else settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    now = datetime.now(UTC)
 
     payload = {
         "sub": subject,
-        "exp": expires,
-        "iat": datetime.now(UTC),
+        "exp": now + timedelta(minutes=expire_minutes),
+        "iat": now,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

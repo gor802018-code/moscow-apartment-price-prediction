@@ -3,26 +3,27 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from src.core.config import get_settings
 from src.models.base import Base
+from src.models.prediction import Prediction  # noqa: F401
 
 # Импортируем все модели, чтобы Alembic их увидел
 from src.models.user import User  # noqa: F401
-from src.models.prediction import Prediction  # noqa: F401
 
 settings = get_settings()
 config = context.config
 
 # Настройка URL БД
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# configparser трактует % как интерполяцию, поэтому экранируем (пароли бывают с %)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 # Конфигурация логирования
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
@@ -42,7 +43,7 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection):
     """Внутренняя функция миграций."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
     with context.begin_transaction():
         context.run_migrations()
 

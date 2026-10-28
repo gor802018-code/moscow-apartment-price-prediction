@@ -4,7 +4,8 @@ import re
 from typing import Any
 
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import async_playwright
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -14,7 +15,16 @@ from tenacity import (
 
 from src.core.logging import get_logger
 
+# Единая логика разбора цены/площади (раньше была скопирована сюда и расходилась с preprocessing).
+# Алиасы с подчёркиванием оставлены для обратной совместимости импортов.
+from src.data.preprocessing import parse_area as _parse_area
+from src.data.preprocessing import parse_price as _parse_price
+
 log = get_logger(__name__)
+
+# Цена — это число С денежным маркером/единицей. Раньше искалось любое число в карточке,
+# и вместо цены могла быть взята площадь, этаж или номер телефона.
+_PRICE_RE = re.compile(r"\d[\d\s.,]*\s*(?:млн|тыс|₽|руб|р\.)", re.IGNORECASE)
 
 
 class ScraperError(Exception):
@@ -25,38 +35,8 @@ class ScraperParseError(ScraperError):
     """Ошибка разбора данных."""
 
 
-class ScraperEmptyResult(ScraperError):
+class ScraperEmptyResultError(ScraperError):
     """Парсер не нашёл никаких объявлений."""
-
-
-def _parse_price(text: str) -> float | None:
-    """Парсит цену из строки ('10 млн' -> 10000000, '5 500 000' -> 5500000)."""
-    text = text.strip().lower().replace(" ", "").replace(",", "")
-
-    # "X млн"
-    match = re.search(r"(\d+(?:\.\d+)?)\s*млн", text)
-    if match:
-        return float(match.group(1)) * 1_000_000
-
-    # "X тыс." (тысячи)
-    match = re.search(r"(\d+(?:\.\d+)?)\s*тыс", text)
-    if match:
-        return float(match.group(1)) * 1_000
-
-    # Просто число
-    match = re.search(r"(\d+)", text)
-    if match:
-        return float(match.group(1))
-
-    return None
-
-
-def _parse_area(text: str) -> float | None:
-    """Парсит площадь ('50 м²' -> 50.0)."""
-    match = re.search(r"(\d+(?:\.\d+)?)\s*м[²2]", text)
-    if match:
-        return float(match.group(1))
-    return None
 
 
 def _parse_rooms(text: str) -> int | None:
@@ -112,7 +92,7 @@ def parse_listing(html: str, url: str = "") -> dict[str, Any]:
 
     Args:
         html: HTML-разметка карточки объявления.
-        url: URL страницы источника для дедупликации.
+        url: URL страницы-источника (сохраняется в поле source_url).
 
     Returns:
         Словарь с полями: price, area, rooms, district, url.
@@ -120,16 +100,16 @@ def parse_listing(html: str, url: str = "") -> dict[str, Any]:
     soup = BeautifulSoup(html, "html.parser")
 
     # Парсим цену
-    price_el = soup.find(string=re.compile(r"млн|тыс|\d[\d\s]*"))
-    price = _parse_price(price_el.string if price_el else "")
+    price_el = soup.find(string=_PRICE_RE)
+    price = _parse_price(str(price_el)) if price_el else None
 
     # Парсим площадь
     area_el = soup.find(string=re.compile(r"\d+\s*м[²2]"))
-    area = _parse_area(area_el.string if area_el else "")
+    area = _parse_area(str(area_el)) if area_el else None
 
     # Парсим комнаты
     rooms_el = soup.find(string=re.compile(r"\d+\s*комн"))
-    rooms = _parse_rooms(rooms_el.string if rooms_el else "")
+    rooms = _parse_rooms(str(rooms_el)) if rooms_el else None
 
     # Парсим район
     district_el = soup.find(string=re.compile(r"р-н|район|м\."))

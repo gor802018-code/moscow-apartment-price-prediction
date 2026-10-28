@@ -1,6 +1,6 @@
 """Pydantic-схемы для API."""
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 # --- Auth ---
 
@@ -31,6 +31,12 @@ class PredictionRequest(BaseModel):
     total_floors: int = Field(ge=1)
     year_built: int = Field(ge=1800, le=2030)
     distance_to_metro_min: float = Field(ge=0, le=120)
+
+    @model_validator(mode="after")
+    def _floor_not_above_total(self) -> "PredictionRequest":
+        if self.floor > self.total_floors:
+            raise ValueError("floor must not exceed total_floors")
+        return self
 
 
 class PredictionResponse(BaseModel):

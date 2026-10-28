@@ -12,15 +12,6 @@ from src.repositories.prediction_repository import PredictionRepository
 from src.repositories.user_repository import UserRepository
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Создает event loop на сессию для pytest-asyncio."""
-    import asyncio
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
 @pytest.fixture
 async def db_engine():
     """Создает тестовый engine."""
@@ -159,8 +150,7 @@ class TestModelRepository:
 
     def test_model_not_found(self):
         """Файл модели не найден."""
-        # Clear class-level cache before test
-        ModelRepository._model = None
+        ModelRepository.invalidate_cache()
         repo = ModelRepository(model_path="/nonexistent/path/model.joblib")
         with pytest.raises(FileNotFoundError):
             repo.load()
@@ -175,3 +165,33 @@ class TestModelRepository:
         repo = ModelRepository(model_path=model_path)
         result = await repo.predict([[1, 30], [2, 50]])
         assert result == [1000000.0, 2000000.0]
+
+    def test_cache_is_keyed_by_path(self, tmp_path):
+        """Регрессия: кэш не должен подсовывать модель, загруженную с другого пути."""
+        first, second = str(tmp_path / "a.joblib"), str(tmp_path / "b.joblib")
+        joblib.dump(_DummyModel([1.0]), first)
+        joblib.dump(_DummyModel([2.0]), second)
+
+        assert ModelRepository(model_path=first).load().predict([[0]]) == [1.0]
+        assert ModelRepository(model_path=second).load().predict([[0]]) == [2.0]
+
+    def test_reloads_after_file_changes(self, tmp_path):
+        """После переобучения (новый файл модели) подхватывается новая версия без рестарта."""
+        import os
+
+        path = tmp_path / "model.joblib"
+        joblib.dump(_DummyModel([1.0]), path)
+        repo = ModelRepository(model_path=str(path))
+        assert repo.load().predict([[0]]) == [1.0]
+
+        joblib.dump(_DummyModel([2.0]), path)
+        stat = path.stat()
+        os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+        assert repo.load().predict([[0]]) == [2.0]
+
+    def test_missing_file_is_not_hidden_by_cache(self, tmp_path):
+        path = str(tmp_path / "m.joblib")
+        joblib.dump(_DummyModel([1.0]), path)
+        ModelRepository(model_path=path).load()
+        with pytest.raises(FileNotFoundError):
+            ModelRepository(model_path=str(tmp_path / "other.joblib")).load()

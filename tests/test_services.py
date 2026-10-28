@@ -2,10 +2,21 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pandas as pd
 import pytest
 
+from src.data.preprocessing import FEATURE_COLUMNS, extract_features
 from src.services.auth_service import AuthService
-from src.services.prediction_service import PredictionService
+from src.services.prediction_service import PredictionService, ValidationError
+
+FULL_FEATURES = {
+    "rooms": 2,
+    "area": 50.0,
+    "floor": 5,
+    "total_floors": 10,
+    "year_built": 2005,
+    "distance_to_metro_min": 10,
+}
 
 
 @pytest.fixture
@@ -131,7 +142,7 @@ class TestPredictionService:
 
             result = await service.predict(
                 user_id=1,
-                input_features={"rooms": 2, "area": 50.0},
+                input_features=FULL_FEATURES,
             )
 
             assert result["predicted_price"] == 8500000.0
@@ -154,3 +165,41 @@ class TestPredictionService:
 
             assert len(history) == 2
             assert history[0]["predicted_price"] == 8500000.0
+
+    @pytest.mark.asyncio
+    async def test_predict_passes_training_features_to_model(self, mock_session):
+        """Модель получает все 9 признаков в порядке обучения (производные не нули)."""
+        mock_model = MagicMock()
+        mock_model.predict = MagicMock(return_value=[1.0])
+        mock_saved = MagicMock(id=1, created_at="2026-01-01T00:00:00")
+
+        with patch.object(PredictionService, "__init__", lambda self, session, model_path=None: None):
+            service = PredictionService(mock_session)
+            service.session = mock_session
+            service.model_repo = MagicMock()
+            service.model_repo.model = mock_model
+            service.prediction_repo = AsyncMock()
+            service.prediction_repo.save_prediction = AsyncMock(return_value=mock_saved)
+
+            await service.predict(user_id=1, input_features=FULL_FEATURES)
+
+        vector = mock_model.predict.call_args[0][0][0]  # predict([vector]) -> первый (единственный) объект
+        assert len(vector) == len(FEATURE_COLUMNS)
+        expected = extract_features(pd.DataFrame([FULL_FEATURES])).iloc[0][FEATURE_COLUMNS]
+        assert vector == [float(v) for v in expected]
+        assert vector[FEATURE_COLUMNS.index("area_per_room")] == 25.0
+
+    @pytest.mark.asyncio
+    async def test_predict_floor_above_total_floors(self, mock_session):
+        with patch.object(PredictionService, "__init__", lambda self, session, model_path=None: None):
+            service = PredictionService(mock_session)
+            with pytest.raises(ValidationError, match="floor"):
+                await service.predict(user_id=1, input_features={**FULL_FEATURES, "floor": 11})
+
+    @pytest.mark.asyncio
+    async def test_predict_missing_features(self, mock_session):
+        """Раньше недостающие признаки молча заменялись нулями."""
+        with patch.object(PredictionService, "__init__", lambda self, session, model_path=None: None):
+            service = PredictionService(mock_session)
+            with pytest.raises(ValidationError, match="Missing features"):
+                await service.predict(user_id=1, input_features={"rooms": 2, "area": 50.0})

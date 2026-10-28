@@ -1,5 +1,7 @@
 """Зависимости FastAPI (DI): БД, текущий пользователь, токен."""
 
+from collections.abc import AsyncIterator
+
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -21,7 +23,7 @@ def set_session_factory(factory: async_sessionmaker):
     _async_session_factory = factory
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncIterator[AsyncSession]:
     """Dependency: получает сессию БД (генератор)."""
     if _async_session_factory is None:
         raise RuntimeError("Session factory not initialized")
@@ -48,14 +50,19 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Dependency: декодирует JWT, находит пользователя по id и возвращает его данные."""
-    user_id = decode_access_token(token)
-    if not user_id:
+    subject = decode_access_token(token)
+    try:
+        user_id = int(subject) if subject else None
+    except ValueError:
+        # Токен со «старым» subject (например, email) — это невалидный токен, а не ошибка сервера
+        user_id = None
+    if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
 
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(

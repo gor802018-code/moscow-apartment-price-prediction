@@ -1,6 +1,6 @@
 """Тесты для API Layer (FastAPI + TestClient + JWT)."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -8,15 +8,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.api.main import app
 from src.models.base import Base
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Создает event loop на сессию для pytest-asyncio."""
-    import asyncio
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture
@@ -59,12 +50,25 @@ class TestHealth:
     """Тесты health check."""
 
     @pytest.mark.asyncio
-    async def test_health(self, client):
-        response = await client.get("/api/v1/health")
+    async def test_health_ok(self, client):
+        with patch("src.api.routers.health.ModelRepository") as repo:
+            repo.return_value.load.return_value = object()
+            response = await client.get("/api/v1/health")
         assert response.status_code == 200
         data = response.json()
-        assert "status" in data
-        assert "checks" in data
+        assert data["status"] == "healthy"
+        assert data["checks"]["database"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_health_degraded_without_model(self, client):
+        """Раньше статус считался, но ответ всегда был 200."""
+        with patch("src.api.routers.health.ModelRepository") as repo:
+            repo.return_value.load.side_effect = FileNotFoundError("no model")
+            response = await client.get("/api/v1/health")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["status"] == "degraded"
+        assert data["checks"]["model"]["status"] == "missing"
 
 
 class TestAuth:
@@ -120,6 +124,29 @@ class TestAuth:
             "password": "WrongPassword!",
         })
         assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_email_is_case_insensitive(self, client):
+        payload = {"email": "Case@Example.com", "password": "SecurePass123!"}
+        assert (await client.post("/api/v1/auth/register", json=payload)).status_code == 201
+        again = {"email": "case@example.com", "password": "SecurePass123!"}
+        assert (await client.post("/api/v1/auth/register", json=again)).status_code == 409
+        assert (await client.post("/api/v1/auth/login", json=again)).status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_login_errors_are_indistinguishable(self, client):
+        """Неверный пароль и несуществующий email дают один и тот же ответ (user enumeration)."""
+        await client.post("/api/v1/auth/register", json={
+            "email": "known@example.com", "password": "CorrectPass123!",
+        })
+        wrong_pw = await client.post("/api/v1/auth/login", json={
+            "email": "known@example.com", "password": "WrongPassword!",
+        })
+        no_user = await client.post("/api/v1/auth/login", json={
+            "email": "nobody@example.com", "password": "WrongPassword!",
+        })
+        assert wrong_pw.status_code == no_user.status_code == 401
+        assert wrong_pw.json() == no_user.json()
 
     @pytest.mark.asyncio
     async def test_login_not_found(self, client):
@@ -211,4 +238,68 @@ class TestPrediction:
     async def test_history_unauthorized(self, client):
         """История без токена возвращает 401."""
         response = await client.get("/api/v1/predict/history")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_floor_above_total_floors_returns_422(self, client, valid_prediction):
+        """Раньше этот запрос приводил к 500."""
+        reg = await client.post("/api/v1/auth/register", json={
+            "email": "floor@example.com", "password": "SecurePass123!",
+        })
+        headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+        response = await client.post(
+            "/api/v1/predict", json={**valid_prediction, "floor": 11}, headers=headers
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_predict_without_model_returns_503(self, client, valid_prediction):
+        """Модель не обучена — это 503, а не безликий 500."""
+        with patch("src.services.prediction_service.ModelRepository") as mock_model_repo:
+            instance = MagicMock()
+            type(instance).model = PropertyMock(side_effect=FileNotFoundError("no model"))
+            mock_model_repo.return_value = instance
+
+            reg = await client.post("/api/v1/auth/register", json={
+                "email": "nomodel@example.com", "password": "SecurePass123!",
+            })
+            headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+            response = await client.post("/api/v1/predict", json=valid_prediction, headers=headers)
+
+        assert response.status_code == 503
+        assert "no model" not in response.text  # внутренности наружу не утекают
+
+    @pytest.mark.asyncio
+    async def test_history_is_isolated_between_users(self, client, valid_prediction):
+        """Регрессия: user_id всегда был 0, и история у всех пользователей была общей."""
+        dummy_model = MagicMock(predict=lambda X: [8500000.0] * len(X))
+
+        with patch("src.services.prediction_service.ModelRepository") as mock_model_repo:
+            instance = MagicMock()
+            instance.model = dummy_model
+            mock_model_repo.return_value = instance
+
+            async def register(email):
+                resp = await client.post("/api/v1/auth/register", json={
+                    "email": email, "password": "SecurePass123!",
+                })
+                return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+            alice, bob = await register("alice@example.com"), await register("bob@example.com")
+            assert (await client.post("/api/v1/predict", json=valid_prediction, headers=alice)).status_code == 201
+
+            alice_history = (await client.get("/api/v1/predict/history", headers=alice)).json()
+            bob_history = (await client.get("/api/v1/predict/history", headers=bob)).json()
+
+        assert len(alice_history["predictions"]) == 1
+        assert bob_history["predictions"] == []
+
+    @pytest.mark.asyncio
+    async def test_token_with_non_numeric_subject_returns_401(self, client):
+        from src.core.security import create_access_token
+
+        token = create_access_token("someone@example.com")  # старый формат: subject = email
+        response = await client.get(
+            "/api/v1/predict/history", headers={"Authorization": f"Bearer {token}"}
+        )
         assert response.status_code == 401
