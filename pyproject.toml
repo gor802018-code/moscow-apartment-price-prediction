@@ -2,7 +2,7 @@
 name = "kwork"
 version = "0.1.0"
 description = "ML-модель предсказания цен на квартиры в Москве с автоматическим сбором данных"
-authors = ["shq_shq"]
+authors = ["gor802018-code"]
 readme = "README.md"
 packages = [{ include = "src" }]
 
