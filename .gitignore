@@ -23,13 +23,25 @@ env/
 *.swp
 *.swo
 
-# Локальные планы/настройки агента
+# Локальные планы и настройки агентов/IDE-ассистентов — не часть проекта
 .gigacode/
 .claude/
 .cursor/
 .continue/
 .aider*
+.windsurf/
+.codeium/
+.codex/
+.opencode/
+.gemini/
+.junie/
+.roo/
+.trae/
+.serena/
+.specstory/
 AGENTS.md
+CLAUDE.md
+GEMINI.md
 
 # Environment
 .env
