@@ -1,5 +1,15 @@
 # Project — Предсказание цен на квартиры в Москве
 
+[![CI](https://github.com/shq_shq/moscow-apartment-price-prediction/actions/workflows/ci.yml/badge.svg)](https://github.com/shq_shq/moscow-apartment-price-prediction/actions/workflows/ci.yml)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com)
+[![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B.svg)](https://streamlit.io)
+[![Docker Compose](https://img.shields.io/badge/docker--compose-2496ED.svg)](docker-compose.yml)
+
+End-to-end ML service predicting Moscow apartment prices: CatBoost + Optuna training on real
+listings, FastAPI with JWT auth, PostgreSQL, Streamlit UI and Docker Compose.
+
 Production-ready SaaS для портфолио: ML-модель предсказания цен + автосбор данных + API + Frontend.
 
 ## Стек
