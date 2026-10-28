@@ -51,6 +51,8 @@ GEMINI.md
 # Docker
 node_modules/
 staticfiles/
+# Локальная надстройка над compose (например, свободный порт БД) — у каждого хоста своя
+docker-compose.override.yml
 
 # OS
 .DS_Store

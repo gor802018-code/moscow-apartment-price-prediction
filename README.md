@@ -100,6 +100,19 @@ docker compose up --build
 («Model is not available»). В продакшене задайте `ENVIRONMENT=production` и свой `SECRET_KEY`
 (с дефолтным ключом приложение не запустится).
 
+Если порт `5432` на хосте занят (например, локальным PostgreSQL), создайте локальный
+`docker-compose.override.yml` — он в git не коммитится:
+
+```yaml
+services:
+  db:
+    ports: !override
+      - "5433:5432"
+```
+
+API внутри сети compose по-прежнему подключается к `db:5432`, снаружи БД будет доступна на
+`localhost:5433`.
+
 ## API Документация
 
 Базовый URL: `http://localhost:8000/api/v1`
