@@ -36,7 +36,7 @@ class TestTrainModel:
     def test_train_model_saves_file(self, sample_df, tmp_path):
         """Модель сохраняется в файл."""
         output_path = str(tmp_path / "model.joblib")
-        result = train_model(sample_df, n_trials=3, output_path=output_path)
+        train_model(sample_df, n_trials=3, output_path=output_path)
 
         assert Path(output_path).exists()
         loaded = joblib.load(output_path)
@@ -67,3 +67,27 @@ class TestTrainModel:
         X = sample_df[result["feature_cols"]].head(5)
         preds = model.predict(X)
         assert len(preds) == 5
+
+    def test_model_predicts_rubles_not_log(self, sample_df):
+        """Регрессия: модель обучалась на log1p(price), и API отдавал бы цену вида 15.7."""
+        result = train_model(sample_df, n_trials=3)
+        preds = result["model"].predict(sample_df[result["feature_cols"]].head(20))
+        assert preds.min() > 100_000
+
+    def test_returns_holdout_metrics_in_rubles(self, sample_df):
+        result = train_model(sample_df, n_trials=3)
+        assert result["test_mae"] > 1_000  # рубли, а не лог-единицы
+        assert 0 < result["test_mape"]
+        assert result["best_iteration"] > 0
+
+    def test_saved_model_works_after_reload(self, sample_df, tmp_path):
+        output_path = str(tmp_path / "model.joblib")
+        result = train_model(sample_df, n_trials=3, output_path=output_path)
+        loaded = joblib.load(output_path)
+        X = sample_df[result["feature_cols"]].head(3)
+        assert np.allclose(loaded.predict(X), result["model"].predict(X))
+
+    def test_derived_features_are_built_automatically(self, sample_df):
+        base = sample_df.drop(columns=["area_per_room", "floor_ratio", "building_age"])
+        result = train_model(base, n_trials=2)
+        assert len(result["feature_cols"]) == 9
